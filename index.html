@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="qrAccountTool">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EMVCo QR Account Extractor &amp; Hash Matcher</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body ng-controller="QrAccountController as vm">
+
+    <header class="app-header">
+        <h1 class="app-title">EMVCo QR Account Extractor &amp; Hash Matcher</h1>
+        <p class="app-subtitle">Extract accounts · Match target accounts · Identify hashes</p>
+        <p class="app-privacy">All processing happens locally in your browser. No data is uploaded.</p>
+    </header>
+
+    <div class="toast-region" aria-live="polite" role="status">
+        <div class="toast" ng-if="vm.feedback" ng-class="'toast-' + vm.feedback.type">{{ vm.feedback.text }}</div>
+    </div>
+
+    <main class="dashboard">
+
+        <!-- Section A: QR Extraction -->
+        <section class="panel panel-extraction" aria-labelledby="extraction-heading">
+            <h2 class="panel-title" id="extraction-heading"><span class="step-badge">1</span> QR Extraction</h2>
+
+            <label class="field-label" for="qr-input">QR Input — hash[TAB]qrcode</label>
+            <textarea id="qr-input" class="data-textarea"
+                      ng-model="vm.qrInput"
+                      ng-change="vm.onQrInputChange()"
+                      spellcheck="false" autocomplete="off" wrap="off"
+                      placeholder="hash, then a TAB character, then the QR payload (one record per line)"></textarea>
+
+            <div class="button-row">
+                <button type="button" class="btn btn-primary" ng-click="vm.extract()">Extract Accounts</button>
+                <button type="button" class="btn btn-secondary" ng-click="vm.clearInput()">Clear Input</button>
+            </div>
+
+            <div class="message" role="status" ng-if="vm.extractMessage" ng-class="'message-' + vm.extractMessage.type">{{ vm.extractMessage.text }}</div>
+
+            <dl class="stats-grid">
+                <div class="stat"><dt>Input records</dt><dd>{{ vm.extractStats.inputRecords }}</dd></div>
+                <div class="stat stat-success"><dt>Successful extractions</dt><dd>{{ vm.extractStats.successRecords }}</dd></div>
+                <div class="stat"><dt>Extracted accounts</dt><dd>{{ vm.extractStats.accountCount }}</dd></div>
+                <div class="stat stat-warning"><dt>No supported accounts</dt><dd>{{ vm.extractStats.noAccountRecords }}</dd></div>
+                <div class="stat stat-error"><dt>Failed records</dt><dd>{{ vm.extractStats.failedRecords }}</dd></div>
+            </dl>
+
+            <label class="field-label" for="extraction-output">Extraction Results — hash[TAB]accounts</label>
+            <textarea id="extraction-output" class="data-textarea data-output" readonly
+                      ng-model="vm.extractionOutput" spellcheck="false" wrap="off"></textarea>
+
+            <div class="button-row">
+                <button type="button" class="btn btn-secondary" ng-click="vm.copyExtraction()">Copy Extraction Results</button>
+            </div>
+
+            <div class="error-summary" ng-if="vm.errors.length > 0">
+                <h3 class="error-title">Record issues ({{ vm.errors.length }})</h3>
+                <ul class="error-list">
+                    <li class="error-item" ng-repeat="err in vm.errors | limitTo: vm.maxErrorsShown"
+                        ng-class="'error-item-' + err.severity">
+                        <span class="error-line">Line {{ err.line }}</span>
+                        <span class="error-status">{{ err.status }}</span>
+                        <span class="error-text">{{ err.message }}</span>
+                    </li>
+                </ul>
+                <p class="hint" ng-if="vm.errors.length > vm.maxErrorsShown">
+                    Showing the first {{ vm.maxErrorsShown }} of {{ vm.errors.length }} issues.
+                </p>
+            </div>
+        </section>
+
+        <!-- Section B: Target Accounts -->
+        <section class="panel panel-targets" aria-labelledby="targets-heading">
+            <h2 class="panel-title" id="targets-heading"><span class="step-badge">2</span> Target Accounts</h2>
+
+            <label class="field-label" for="target-input">Target Accounts — one account per line</label>
+            <textarea id="target-input" class="data-textarea"
+                      ng-model="vm.targetInput"
+                      ng-model-options="{ debounce: 250 }"
+                      ng-change="vm.onTargetInputChange()"
+                      spellcheck="false" autocomplete="off" wrap="off"
+                      placeholder="000123456&#10;000789012"></textarea>
+
+            <div class="button-row">
+                <button type="button" class="btn btn-primary" ng-click="vm.findMatches()" ng-disabled="!vm.canFindMatches()">Find Matches</button>
+                <button type="button" class="btn btn-secondary" ng-click="vm.clearTargets()">Clear Targets</button>
+            </div>
+
+            <p class="hint" ng-if="!vm.canFindMatches()">Run Extract Accounts on the current QR input to enable matching.</p>
+
+            <div class="message" role="status" ng-if="vm.targetMessage" ng-class="'message-' + vm.targetMessage.type">{{ vm.targetMessage.text }}</div>
+
+            <dl class="stats-grid stats-grid-single">
+                <div class="stat"><dt>Unique target accounts</dt><dd>{{ vm.targetCount }}</dd></div>
+            </dl>
+        </section>
+
+        <!-- Section C: Matching Results -->
+        <section class="panel panel-matches" aria-labelledby="matches-heading">
+            <h2 class="panel-title" id="matches-heading"><span class="step-badge">3</span> Matching Results</h2>
+
+            <div class="message" role="status" ng-if="vm.matchMessage" ng-class="'message-' + vm.matchMessage.type">{{ vm.matchMessage.text }}</div>
+
+            <dl class="stats-grid">
+                <div class="stat stat-success"><dt>Matching records</dt><dd>{{ vm.matchStats.recordCount }}</dd></div>
+                <div class="stat"><dt>Unique matched accounts</dt><dd>{{ vm.matchStats.uniqueMatchedCount }}</dd></div>
+            </dl>
+
+            <p class="summary" ng-if="vm.matchStats.summary">{{ vm.matchStats.summary }}</p>
+
+            <label class="field-label" for="match-output">Account Match Results — hash[TAB]matched_accounts</label>
+            <textarea id="match-output" class="data-textarea data-output" readonly
+                      ng-model="vm.matchOutput" spellcheck="false" wrap="off"></textarea>
+
+            <div class="button-row">
+                <button type="button" class="btn btn-secondary" ng-click="vm.copyMatches()">Copy Matching Results</button>
+                <button type="button" class="btn btn-secondary" ng-click="vm.exportMatches()">Export Matches (.txt)</button>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.8.3/angular.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
