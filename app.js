@@ -117,7 +117,7 @@
              * Extract accounts from one QR payload.
              * Returns { status, accounts: [], message }.
              * Rule A: top-level 42 (subtag 02 = KHR, 03 = USD) has priority, no fallback.
-             * Rule B: only without top-level 42, top-level 29 subtag 01.
+             * Rule B: only without top-level 42, top-level 29 then 30, subtag 01.
              */
             function extractAccounts(qrCode) {
                 var top = parseTlv(qrCode);
@@ -154,31 +154,37 @@
                     return { status: STATUS.SUCCESS, accounts: accounts42, message: '' };
                 }
 
-                var tag29 = findField(top.fields, '29');
-                if (tag29 !== null) {
-                    var nested29 = parseTlv(tag29.value);
-                    if (nested29.error) {
+                // Fallback tags, in priority order; each carries the account in subtag 01.
+                var fallbackTags = ['29', '30'];
+                for (var f = 0; f < fallbackTags.length; f++) {
+                    var fbTag = fallbackTags[f];
+                    var fbField = findField(top.fields, fbTag);
+                    if (fbField === null) {
+                        continue;
+                    }
+                    var fbNested = parseTlv(fbField.value);
+                    if (fbNested.error) {
                         return {
                             status: STATUS.INVALID_TLV,
                             accounts: [],
-                            message: 'Invalid nested TLV in tag 29: ' + nested29.error.message
+                            message: 'Invalid nested TLV in tag ' + fbTag + ': ' + fbNested.error.message
                         };
                     }
-                    var account29 = subValue(nested29.fields, '01');
-                    if (account29 === null) {
+                    var fbAccount = subValue(fbNested.fields, '01');
+                    if (fbAccount === null) {
                         return {
                             status: STATUS.ACCOUNT_NOT_FOUND,
                             accounts: [],
-                            message: 'Tag 29 present but has no subtag 01 account.'
+                            message: 'Tag ' + fbTag + ' present but has no subtag 01 account.'
                         };
                     }
-                    return { status: STATUS.SUCCESS, accounts: [account29], message: '' };
+                    return { status: STATUS.SUCCESS, accounts: [fbAccount], message: '' };
                 }
 
                 return {
                     status: STATUS.NO_SUPPORTED_TAG,
                     accounts: [],
-                    message: 'No top-level tag 42 or tag 29 found.'
+                    message: 'No top-level tag 42, 29 or 30 found.'
                 };
             }
 
